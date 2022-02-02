@@ -6,7 +6,7 @@ hybridEB computes the hybrid real/fourier-space band-power E- and B-mode estimat
 # example
 
 ```python
-import hybridEB
+import hybrideb
 
 theta_min = 1 # arcmin
 theta_max = 400 # arcmin
