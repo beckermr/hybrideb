@@ -1,7 +1,7 @@
-import sys
 import numpy as np
 import scipy.integrate
 import scipy.special
+import tqdm
 
 from ._dblquad import dblquad
 
@@ -214,7 +214,6 @@ class BinEB(object):
 
             self.mp = np.zeros((self.Nb, self.Nb))
             for k in range(self.Nb):
-                # sys.stdout.write("|")
                 for i in range(self.Nb):
                     if windows is None:
                         if i < k:
@@ -281,7 +280,6 @@ class BinEB(object):
                             self.mp[k, i] = (
                                 4.0 * inv2[k] - 12.0 * inv4[k] * self.fb[i]
                             ) / knorm[k]
-            # sys.stdout.write("\n")
 
             if HAVE_PYGSL:
 
@@ -405,9 +403,7 @@ class BinEB(object):
         self.ellv = np.logspace(0.0, 5.5, 1500)
         self.ellwindowsJ0 = np.zeros((self.Nb, len(self.ellv)))
         self.ellwindowsJ4 = np.zeros((self.Nb, len(self.ellv)))
-        for i in range(self.Nb):
-            sys.stdout.write("|")
-            sys.stdout.flush()
+        for i in tqdm.trange(self.Nb, desc="computing BinEB ell windows", ncols=80):
             if HAVE_PYGSL:
                 epsabs = 1e-6
                 epsrel = 1e-6
@@ -446,6 +442,7 @@ class BinEB(object):
                                 self.Lb[i],
                                 self.Hb[i],
                                 args=(ell, self.windows[i], 0),
+                                limit=100,
                             )
                         )[0]
                         for ell in self.ellv
@@ -459,6 +456,7 @@ class BinEB(object):
                                 self.Lb[i],
                                 self.Hb[i],
                                 args=(ell, self.windows[i], 4),
+                                limit=100,
                             )
                         )[0]
                         for ell in self.ellv
@@ -466,7 +464,6 @@ class BinEB(object):
                 )
                 self.ellwindowsJ0[i, :] = win0
                 self.ellwindowsJ4[i, :] = win4
-        sys.stdout.write("\n")
 
     def write_data(self, fname):
         """

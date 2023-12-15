@@ -2,6 +2,7 @@ import numpy as np
 import scipy.special
 import scipy.interpolate
 import copy
+import tqdm
 
 from ._dblquad import dblquad
 
@@ -20,7 +21,6 @@ class HybridEB(object):
         self, tmin_in, tmax_in, Nbins, linear=False, useArcmin=True, windows=None
     ):
         # numerics
-        self.limit = 2
         self.epsabs = 1e-1
         self.epsrel = 1e-1
 
@@ -100,7 +100,12 @@ class HybridEB(object):
             )
 
     def ellwin0(
-        self, ellwin, bini, ellrange=(1.0, 1e5), epsrel=1e-6, epsabs=1e-6, limit=25
+        self,
+        ellwin,
+        bini,
+        ellrange=(1.0, 1e5),
+        epsrel=1e-6,
+        epsabs=1e-6,
     ):
         args = [self.windows[bini], ellwin]
         return dblquad(
@@ -111,12 +116,16 @@ class HybridEB(object):
             lambda x: self.Hb[bini],
             epsabs=self.epsabs,
             epsrel=self.epsrel,
-            limit=self.limit,
             args=args,
         )
 
     def ellwin4(
-        self, ellwin, bini, ellrange=(1.0, 1e5), epsrel=1e-6, epsabs=1e-6, limit=25
+        self,
+        ellwin,
+        bini,
+        ellrange=(1.0, 1e5),
+        epsrel=1e-6,
+        epsabs=1e-6,
     ):
         args = [self.windows[bini], ellwin]
         return dblquad(
@@ -127,32 +136,22 @@ class HybridEB(object):
             lambda x: self.Hb[bini],
             epsabs=self.epsabs,
             epsrel=self.epsrel,
-            limit=self.limit,
             args=args,
         )
 
     def make_est(
-        self, ellwin, beb, sepEB=False, ellrange=(1.0, 1e5), Naint=10, name="doing work"
+        self,
+        ellwin,
+        beb,
+        sepEB=False,
+        ellrange=(1.0, 1e5),
+        Naint=10,
     ):
         A0 = np.zeros(beb.Nb)
         A4 = np.zeros(beb.Nb)
 
-        import progressbar
-
-        bar = progressbar.ProgressBar(
-            maxval=beb.Nb,
-            widgets=[
-                progressbar.Bar(marker="|", left="%s: |" % name, right=""),
-                " ",
-                progressbar.Percentage(),
-                " ",
-                progressbar.ETA(),
-            ],
-        )
-        bar.start()
         iranges = np.linspace(ellrange[0], ellrange[1], int(Naint + 1))
         for i in range(beb.Nb):
-            bar.update(i + 1)
             A0[i] = 0.0
             A4[i] = 0.0
             for j in range(int(Naint)):
@@ -160,7 +159,6 @@ class HybridEB(object):
                 A4[i] += self.ellwin4(ellwin, i, ellrange=(iranges[j], iranges[j + 1]))
             A0[i] = 2.0 * A0[i] / beb.invnorm[i] * 2.0 * np.pi
             A4[i] = 2.0 * A4[i] / beb.invnorm[i] * 2.0 * np.pi
-        bar.finish()
 
         if sepEB:
             mat = np.identity(beb.Nb) + np.dot(
@@ -203,7 +201,7 @@ class GaussEB(object):
             self.Hb = bEB.Hb.copy()
 
             def make_win(lm, ls):
-                return lambda l: self.gausswin(l, lm, ls)
+                return lambda _l: self.gausswin(_l, lm, ls)
 
             self.Nl = Nl
             self.lmin = lmin
@@ -222,7 +220,7 @@ class GaussEB(object):
             self._ellH = []
             self._ellwin = []
             fac = 10.0
-            for i in range(self.Nl):
+            for i in tqdm.trange(self.Nl, desc="making GaussEB ell windows", ncols=80):
                 self._Nint.append(3 + i / 4)
                 self._ellwin.append(make_win(self.lm[i], self.ls[i]))
                 if self.lm[i] - fac * self.ls[i] * self.lm[i] <= 0.0:
@@ -236,8 +234,11 @@ class GaussEB(object):
             self.wp = []
             self.wm = []
             loc = 0
-            for ellwin, ellL, ellH, Nint in zip(
-                self._ellwin, self._ellL, self._ellH, self._Nint
+            for ellwin, ellL, ellH, Nint in tqdm.tqdm(
+                zip(self._ellwin, self._ellL, self._ellH, self._Nint),
+                desc="making GaussEB estimators",
+                ncols=80,
+                total=len(self._ellwin),
             ):
                 r, fp, fm, ell, wp, wm = hEB.make_est(
                     ellwin,
@@ -245,7 +246,6 @@ class GaussEB(object):
                     sepEB=sepEB,
                     ellrange=(ellL, ellH),
                     Naint=Nint,
-                    name="doing EB stat. %3d:" % loc,
                 )
                 self.r = r
                 self.ell = ell
@@ -384,28 +384,14 @@ class SimpleGaussEB(object):
             self.fm = []
             self.wp = []
             self.wm = []
-            for i in range(self.Nl):
+            for i in tqdm.trange(
+                self.Nl, desc="making SimpleGaussEB ell windows", ncols=80
+            ):
                 lm = self.lm[i]
                 ls = self.ls[i]
                 fpi = []
 
-                import progressbar
-
-                bar = progressbar.ProgressBar(
-                    maxval=bEB.Nb,
-                    widgets=[
-                        progressbar.Bar(
-                            marker="|", left="doing EB stat. %3d: |" % i, right=""
-                        ),
-                        " ",
-                        progressbar.Percentage(),
-                        " ",
-                        progressbar.ETA(),
-                    ],
-                )
-                bar.start()
-                for j in range(bEB.Nb):
-                    bar.update(j + 1)
+                for j in tqdm.trange(bEB.Nb):
                     y0, err = scipy.integrate.quad(
                         self.j0intfun_gauss, 0.0, 1e2, args=(self.r[j], lm, ls)
                     )
@@ -417,7 +403,6 @@ class SimpleGaussEB(object):
                     )
                     fpi.append((y0 + y1 + y2) * (self.r[j] / 2.0 / np.pi) ** 2.0)
                 fpi = np.array(fpi)
-                bar.finish()
 
                 fp, fm = bEB.fplusminus(fpi)
                 self.fp.append(fp)

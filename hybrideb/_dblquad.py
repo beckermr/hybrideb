@@ -49,7 +49,7 @@ if HAVE_PYGSL:
 else:
 
     def dblquad_scipy(
-        func, a, b, gfun, hfun, args=(), epsrel=1e-12, epsabs=1e-12, limit=50
+        func, a, b, gfun, hfun, args=(), epsrel=1e-12, epsabs=1e-12, limit=100
     ):
         def _infunc(x, func, gfun, hfun, more_args):
             a = gfun(x)
